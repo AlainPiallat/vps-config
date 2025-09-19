@@ -38,7 +38,10 @@ nano .env
 
 ### 3. Lancer l'installation :
 
+Rendre le script exécutable et le lancer :
+
 ```bash
+chmod +x install.sh
 ./install.sh
 ```
 
