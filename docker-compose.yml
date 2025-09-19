@@ -1,8 +1,6 @@
-version: '3.8'
-
 networks:
   traefik-proxy:
-    external: true
+    driver: bridge
   internal:
     driver: bridge
   vpn-restricted:
@@ -17,6 +15,7 @@ volumes:
   nextcloud-data:
   mailserver-data:
   backup-data:
+  nextcloud_aio_mastercontainer:
 
 services:
   # =============================================================================
@@ -71,7 +70,7 @@ services:
   # MONITORING - Grafana + Prometheus
   # =============================================================================
   prometheus:
-    image: prometheus/prometheus:latest
+    image: prom/prometheus:latest
     container_name: prometheus
     restart: unless-stopped
     volumes:
@@ -249,6 +248,3 @@ services:
       - "traefik.http.routers.backup.tls=true"
       - "traefik.http.routers.backup.tls.certresolver=cloudflare"
       - "traefik.http.services.backup.loadbalancer.server.port=8200"
-
-volumes:
-  nextcloud_aio_mastercontainer:

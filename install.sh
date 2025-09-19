@@ -164,8 +164,14 @@ sudo mkdir -p /opt/docker-services
 sudo chown $SSH_USER:$SSH_USER /opt/docker-services
 
 # Copy configuration files
-cp -r * /opt/docker-services/
+cp -r . /opt/docker-services/
 cd /opt/docker-services
+
+# Verify .env file exists
+if [ ! -f .env ]; then
+    error ".env file was not copied properly"
+    exit 1
+fi
 
 # Make scripts executable
 chmod +x backup/scripts/*.sh
