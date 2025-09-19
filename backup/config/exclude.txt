@@ -1,0 +1,26 @@
+# Restic backup exclusions
+# Temporary files and cache
+**/tmp/*
+**/cache/*
+**/.cache/*
+**/temp/*
+
+# Log files
+**/*.log
+**/logs/*
+
+# System files
+**/.DS_Store
+**/Thumbs.db
+**/.Trash*
+
+# Docker specific exclusions
+**/overlay2/*
+**/docker/containers/*/mounts/*
+
+# Large database files during backup (backup from dumps instead)
+**/mysql/*
+**/postgres/*
+
+# Exclude other backup files to prevent nested backups
+**/backup-data/*

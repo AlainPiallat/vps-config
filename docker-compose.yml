@@ -1,0 +1,254 @@
+version: '3.8'
+
+networks:
+  traefik-proxy:
+    external: true
+  internal:
+    driver: bridge
+  vpn-restricted:
+    driver: bridge
+
+volumes:
+  traefik-certs:
+  portainer-data:
+  grafana-data:
+  prometheus-data:
+  vaultwarden-data:
+  nextcloud-data:
+  mailserver-data:
+  backup-data:
+
+services:
+  # =============================================================================
+  # TRAEFIK - Reverse Proxy
+  # =============================================================================
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - traefik-certs:/certs
+    networks:
+      - traefik-proxy
+    environment:
+      - CLOUDFLARE_EMAIL=${CLOUDFLARE_EMAIL}
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.tls.certresolver=cloudflare"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.middlewares=vpn-whitelist"
+
+  # =============================================================================
+  # PORTAINER - Docker Management
+  # =============================================================================
+  portainer:
+    image: portainer/portainer-ce:lts
+    container_name: portainer
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    networks:
+      - traefik-proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.portainer.rule=Host(`portainer.${DOMAIN}`)"
+      - "traefik.http.routers.portainer.tls=true"
+      - "traefik.http.routers.portainer.tls.certresolver=cloudflare"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+      - "traefik.http.routers.portainer.middlewares=vpn-whitelist"
+
+  # =============================================================================
+  # MONITORING - Grafana + Prometheus
+  # =============================================================================
+  prometheus:
+    image: prometheus/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - internal
+      - traefik-proxy
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+  grafana:
+    image: grafana/grafana:main
+    container_name: grafana
+    restart: unless-stopped
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana.ini:/etc/grafana/grafana.ini:ro
+    networks:
+      - internal
+      - traefik-proxy
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`monitoring.${DOMAIN}`)"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.tls.certresolver=cloudflare"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+      - "traefik.http.routers.grafana.middlewares=vpn-whitelist"
+
+  # =============================================================================
+  # NEXTCLOUD AIO
+  # =============================================================================
+  nextcloud-aio-mastercontainer:
+    image: nextcloud/all-in-one:latest
+    container_name: nextcloud-aio-mastercontainer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - nextcloud_aio_mastercontainer:/mnt/docker-aio-config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik-proxy
+    environment:
+      - APACHE_PORT=${APACHE_PORT}
+      - APACHE_IP_BINDING=0.0.0.0
+      - NEXTCLOUD_DATADIR=${NEXTCLOUD_DATADIR}
+      - SKIP_DOMAIN_VALIDATION=true
+      - NEXTCLOUD_TRUSTED_DOMAINS=cloud.${DOMAIN}
+
+  # =============================================================================
+  # VAULTWARDEN - Password Manager
+  # =============================================================================
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    volumes:
+      - vaultwarden-data:/data
+      - ./vaultwarden/config.json:/data/config.json:ro
+    networks:
+      - traefik-proxy
+    environment:
+      - DOMAIN=https://vaultwarden.${DOMAIN}
+      - ADMIN_TOKEN=${VAULTWARDEN_ADMIN_TOKEN}
+      - SENDS_ALLOWED=true
+      - EMERGENCY_ACCESS_ALLOWED=true
+      - WEB_VAULT_ENABLED=true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vaultwarden.rule=Host(`vaultwarden.${DOMAIN}`)"
+      - "traefik.http.routers.vaultwarden.tls=true"
+      - "traefik.http.routers.vaultwarden.tls.certresolver=cloudflare"
+      - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+
+  # =============================================================================
+  # MAIL SERVER
+  # =============================================================================
+  mailserver:
+    image: mailserver/docker-mailserver:latest
+    container_name: mailserver
+    hostname: mail.${DOMAIN}
+    restart: unless-stopped
+    ports:
+      - "25:25"
+      - "587:587"
+      - "993:993"
+      - "995:995"
+    volumes:
+      - mailserver-data:/var/mail
+      - ./mailserver/config/:/tmp/docker-mailserver/
+      - ./mailserver/mail-logs/:/var/log/mail/
+      - ./traefik/certs/:/etc/letsencrypt/:ro
+    networks:
+      - traefik-proxy
+    environment:
+      - ENABLE_SPAMASSASSIN=1
+      - ENABLE_CLAMAV=1
+      - ENABLE_FAIL2BAN=1
+      - ENABLE_POSTGREY=1
+      - ONE_DIR=1
+      - DMS_DEBUG=0
+      - SSL_TYPE=manual
+      - SSL_CERT_PATH=/etc/letsencrypt/live/${DOMAIN}/fullchain.pem
+      - SSL_KEY_PATH=/etc/letsencrypt/live/${DOMAIN}/privkey.pem
+
+  # =============================================================================
+  # WIREGUARD VPN
+  # =============================================================================
+  wireguard:
+    image: linuxserver/wireguard:latest
+    container_name: wireguard
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+      - SERVERURL=vpn.${DOMAIN}
+      - SERVERPORT=51820
+      - PEERS=5
+      - PEERDNS=auto
+      - INTERNAL_SUBNET=10.13.13.0
+    volumes:
+      - ./vpn/config:/config
+      - /lib/modules:/lib/modules
+    ports:
+      - "51820:51820/udp"
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    networks:
+      - vpn-restricted
+
+  # =============================================================================
+  # BACKUP SYSTEM
+  # =============================================================================
+  restic-backup:
+    image: restic/restic:latest
+    container_name: restic-backup
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/volumes:/docker-volumes:ro
+      - backup-data:/backups
+      - ./backup/scripts:/scripts:ro
+      - ./backup/config:/config:ro
+    environment:
+      - RESTIC_REPOSITORY=/backups/repository
+      - RESTIC_PASSWORD=${RESTIC_PASSWORD}
+      - BACKUP_SCHEDULE=0 2 * * *  # Daily at 2 AM
+    networks:
+      - internal
+    entrypoint: ["/scripts/backup-cron.sh"]
+
+  # Backup Web UI (Duplicati-style interface)
+  backup-ui:
+    image: duplicati/duplicati:latest
+    container_name: backup-ui
+    restart: unless-stopped
+    volumes:
+      - backup-data:/backups
+      - /var/lib/docker/volumes:/source:ro
+      - ./backup/duplicati-config:/config
+    networks:
+      - traefik-proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backup.rule=Host(`back.${DOMAIN}`)"
+      - "traefik.http.routers.backup.tls=true"
+      - "traefik.http.routers.backup.tls.certresolver=cloudflare"
+      - "traefik.http.services.backup.loadbalancer.server.port=8200"
+
+volumes:
+  nextcloud_aio_mastercontainer:

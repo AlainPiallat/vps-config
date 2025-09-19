@@ -1,0 +1,37 @@
+http:
+  middlewares:
+    vpn-whitelist:
+      ipWhiteList:
+        sourceRange:
+          - "10.13.13.0/24"  # VPN subnet
+          - "127.0.0.1/32"   # localhost
+          - "10.0.0.0/8"     # private networks
+          - "172.16.0.0/12"  # private networks
+          - "192.168.0.0/16" # private networks
+
+    secure-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+        accessControlMaxAge: 100
+        hostsProxyHeaders:
+          - "X-Forwarded-Host"
+        referrerPolicy: "same-origin"
+        sslRedirect: true
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+
+    default-headers:
+      headers:
+        frameDeny: true
+        sslRedirect: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000

@@ -1,0 +1,22 @@
+{
+  "domain": "https://vaultwarden.${DOMAIN}",
+  "sends_allowed": true,
+  "emergency_access_allowed": true,
+  "web_vault_enabled": true,
+  "admin_token": "${VAULTWARDEN_ADMIN_TOKEN}",
+  "invitation_org_name": "VPS Services",
+  "invitations_allowed": true,
+  "password_iterations": 100000,
+  "show_password_hint": false,
+  "signups_allowed": false,
+  "signups_verify": true,
+  "signups_verify_resend_time": 3600,
+  "signups_verify_resend_limit": 6,
+  "smtp_host": "mailserver",
+  "smtp_from": "admin@${DOMAIN}",
+  "smtp_port": 587,
+  "smtp_ssl": true,
+  "smtp_username": "admin@${DOMAIN}",
+  "smtp_password": "${SMTP_PASSWORD}",
+  "smtp_timeout": 15
+}
