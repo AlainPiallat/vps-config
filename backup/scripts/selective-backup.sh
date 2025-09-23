@@ -32,6 +32,11 @@ warning() {
 # Load environment variables
 source /config/backup.env
 
+# Load Discord notifications if webhook is configured
+if [ -n "$NOTIFICATION_URL" ] && [[ "$NOTIFICATION_URL" == *"discord"* ]]; then
+    source /opt/docker-services/discord-notifications.sh
+fi
+
 # Function to list available services
 list_services() {
     echo "Available Docker services for backup:"
@@ -73,6 +78,11 @@ backup_service() {
     done
 
     success "Backup completed for service: $service_name"
+    
+    # Send Discord notification if configured
+    if [ -n "$NOTIFICATION_URL" ] && [[ "$NOTIFICATION_URL" == *"discord"* ]] && command -v notify_backup_success >/dev/null 2>&1; then
+        notify_backup_success "$service_name"
+    fi
 }
 
 # Function to restore specific service
@@ -121,6 +131,11 @@ restore_service() {
     rm -rf "$restore_path"
 
     success "Restore completed for service: $service_name"
+    
+    # Send Discord notification if configured
+    if [ -n "$NOTIFICATION_URL" ] && [[ "$NOTIFICATION_URL" == *"discord"* ]] && command -v send_discord_notification >/dev/null 2>&1; then
+        send_discord_notification "✅ Restore Completed" "Service **$service_name** restored successfully from snapshot $snapshot_id" "3066993" "Success"
+    fi
 }
 
 # Function to list snapshots for a specific service
@@ -158,7 +173,15 @@ backup_all_services() {
     
     for service in "${services[@]}"; do
         log "Backing up service: $service"
-        backup_service "$service" || warning "Failed to backup $service"
+        if backup_service "$service"; then
+            log "Successfully backed up $service"
+        else
+            warning "Failed to backup $service"
+            # Send Discord notification for backup failure
+            if [ -n "$NOTIFICATION_URL" ] && [[ "$NOTIFICATION_URL" == *"discord"* ]] && command -v notify_backup_failed >/dev/null 2>&1; then
+                notify_backup_failed "$service" "Backup failed during automated backup"
+            fi
+        fi
     done
     
     success "All services backed up individually"

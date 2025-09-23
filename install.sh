@@ -122,17 +122,7 @@ log_to_file "USER" "User confirmed configuration"
 log "Starting VPS setup..."
 
 # =============================================================================
-# 1. System Update
-# =============================================================================
-log "Updating system packages..."
-info "This may take a few minutes..."
-sudo apt update && sudo apt upgrade -y >/dev/null 2>&1
-log_to_file "SYSTEM" "System packages updated successfully"
-sudo apt install -y curl wget git ufw fail2ban htop >/dev/null 2>&1
-log_to_file "SYSTEM" "Additional packages installed successfully"
-
-# =============================================================================
-# 2. SSH Security Configuration
+# 1. SSH Security Configuration
 # =============================================================================
 log "Configuring SSH security..."
 
@@ -142,78 +132,78 @@ log_to_file "SSH" "SSH config backed up"
 
 # Configure SSH
 log_to_file "SSH" "Configuring SSH port to $SSH_PORT"
-sudo sed -i "s/#Port 22/Port $SSH_PORT/" /etc/ssh/sshd_config >/dev/null 2>&1
+sudo sed -i "s/#Port 22/Port $SSH_PORT/" /etc/ssh/sshd_config 
 log_to_file "SSH" "Disabling root login"
-sudo sed -i 's/PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config >/dev/null 2>&1
+sudo sed -i 's/PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config 
 log_to_file "SSH" "Disabling password authentication"
-sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config >/dev/null 2>&1
+sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config 
 log_to_file "SSH" "Enabling public key authentication"
-sudo sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config >/dev/null 2>&1
+sudo sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config 
 
 # Add SSH public key
 log_to_file "SSH" "Setting up SSH directory"
-mkdir -p ~/.ssh >/dev/null 2>&1
+mkdir -p ~/.ssh 
 log_to_file "SSH" "Adding SSH public key"
 echo "$SSH_PUBLIC_KEY" >> ~/.ssh/authorized_keys 2>/dev/null
 log_to_file "SSH" "Setting SSH permissions"
-chmod 700 ~/.ssh >/dev/null 2>&1
-chmod 600 ~/.ssh/authorized_keys >/dev/null 2>&1
+chmod 700 ~/.ssh 
+chmod 600 ~/.ssh/authorized_keys 
 log_to_file "SSH" "SSH public key added successfully"
 
 # Restart SSH service
-sudo systemctl restart ssh >/dev/null 2>&1
+sudo systemctl restart ssh 
 success "SSH configured on port $SSH_PORT"
 
 # =============================================================================
-# 3. Firewall Configuration
+# 2. Firewall Configuration
 # =============================================================================
 log "Configuring UFW firewall..."
 
-sudo ufw --force reset >/dev/null 2>&1
-sudo ufw default deny incoming >/dev/null 2>&1
-sudo ufw default allow outgoing >/dev/null 2>&1
+sudo ufw --force reset 
+sudo ufw default deny incoming 
+sudo ufw default allow outgoing 
 
 # Essential ports
-sudo ufw allow $SSH_PORT/tcp comment 'SSH' >/dev/null 2>&1
-sudo ufw allow 80/tcp comment 'HTTP' >/dev/null 2>&1
-sudo ufw allow 443/tcp comment 'HTTPS' >/dev/null 2>&1
-sudo ufw allow 25/tcp comment 'SMTP' >/dev/null 2>&1
-sudo ufw allow 587/tcp comment 'SMTP Submission' >/dev/null 2>&1
-sudo ufw allow 993/tcp comment 'IMAPS' >/dev/null 2>&1
-sudo ufw allow 995/tcp comment 'POP3S' >/dev/null 2>&1
-sudo ufw allow 51820/udp comment 'WireGuard VPN' >/dev/null 2>&1
+sudo ufw allow $SSH_PORT/tcp comment 'SSH' 
+sudo ufw allow 80/tcp comment 'HTTP' 
+sudo ufw allow 443/tcp comment 'HTTPS' 
+sudo ufw allow 25/tcp comment 'SMTP' 
+sudo ufw allow 587/tcp comment 'SMTP Submission' 
+sudo ufw allow 993/tcp comment 'IMAPS' 
+sudo ufw allow 995/tcp comment 'POP3S' 
+sudo ufw allow 51820/udp comment 'WireGuard VPN' 
 
-sudo ufw --force enable >/dev/null 2>&1
+sudo ufw --force enable 
 success "Firewall configured and enabled"
 
 # =============================================================================
-# 4. Docker Installation
+# 3. Docker Installation
 # =============================================================================
 log "Installing Docker and Docker Compose..."
 info "Downloading and installing Docker (this may take a few minutes)..."
 
 # Install Docker
 curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh >/dev/null 2>&1
+sudo sh get-docker.sh
 sudo usermod -aG docker $SSH_USER
 log_to_file "DOCKER" "User $SSH_USER added to docker group"
 
 # Install Docker Compose
 log_to_file "DOCKER" "Downloading Docker Compose"
 info "Downloading Docker Compose..."
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose >/dev/null 2>&1
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose 
 log_to_file "DOCKER" "Making Docker Compose executable"
-sudo chmod +x /usr/local/bin/docker-compose >/dev/null 2>&1
+sudo chmod +x /usr/local/bin/docker-compose
 log_to_file "DOCKER" "Docker Compose installed successfully"
 
 # Create Docker networks
-sudo docker network create traefik-proxy >/dev/null 2>&1
+sudo docker network create traefik-proxy 
 log_to_file "DOCKER" "Docker network created"
 
 success "Docker installed successfully"
 
 # =============================================================================
-# 5. Deploy Services
+# 4. Deploy Services
 # =============================================================================
 log "Deploying Docker services..."
 
@@ -224,7 +214,7 @@ log_to_file "DEPLOY" "Deployment directory created: /opt/docker-services"
 
 # Copy configuration files
 log_to_file "DEPLOY" "Copying configuration files to /opt/docker-services/"
-cp -r . /opt/docker-services/ >/dev/null 2>&1
+cp -r . /opt/docker-services/ 
 log_to_file "DEPLOY" "Changing to deployment directory"
 cd /opt/docker-services
 
@@ -237,7 +227,7 @@ log_to_file "DEPLOY" ".env file verified successfully"
 
 # Make scripts executable
 log_to_file "DEPLOY" "Making backup scripts executable"
-chmod +x backup/scripts/*.sh >/dev/null 2>&1
+chmod +x backup/scripts/*.sh 
 log_to_file "DEPLOY" "Backup scripts made executable"
 
 # Generate Vaultwarden admin token if not set
@@ -250,9 +240,9 @@ fi
 
 # Create required directories
 log_to_file "NEXTCLOUD" "Creating Nextcloud data directory: $NEXTCLOUD_DATADIR"
-sudo mkdir -p $NEXTCLOUD_DATADIR >/dev/null 2>&1
+sudo mkdir -p $NEXTCLOUD_DATADIR 
 log_to_file "NEXTCLOUD" "Setting Nextcloud directory ownership to www-data (33:33)"
-sudo chown 33:33 $NEXTCLOUD_DATADIR >/dev/null 2>&1
+sudo chown 33:33 $NEXTCLOUD_DATADIR 
 log_to_file "NEXTCLOUD" "Nextcloud data directory created: $NEXTCLOUD_DATADIR"
 
 # Function to deploy services with proper Docker permissions
@@ -261,15 +251,15 @@ deploy_services() {
     info "Pulling Docker images and starting containers (this may take several minutes)..."
     
     # Use sg to get Docker permissions in this shell
-    if ! docker ps >/dev/null 2>&1; then
+    if ! docker ps ; then
         log "Activating Docker group permissions..."
         # Execute the docker commands with the docker group
         sg docker -c "
-            docker-compose up -d >/dev/null 2>&1
+            docker-compose up -d 
         "
     else
         # Docker already works
-        docker-compose up -d >/dev/null 2>&1
+        docker-compose up -d 
     fi
     
     log_to_file "DEPLOY" "Docker services deployment completed"
@@ -281,7 +271,7 @@ deploy_services
 success "Services deployed successfully"
 
 # =============================================================================
-# 6. Post-installation checks
+# 5. Post-installation checks
 # =============================================================================
 log "Running post-installation checks..."
 
@@ -290,10 +280,10 @@ sleep 30
 
 # Check if containers are running (with proper Docker permissions)
 log "Checking container status..."
-if ! docker ps >/dev/null 2>&1; then
-    sg docker -c "docker-compose ps" >/dev/null 2>&1
+if ! docker ps ; then
+    sg docker -c "docker-compose ps" 
 else
-    docker-compose ps >/dev/null 2>&1
+    docker-compose ps 
 fi
 log_to_file "DEPLOY" "Container status checked"
 
@@ -354,3 +344,51 @@ warning "4. Download and save your VPN client configurations"
 
 info "Setup completed! Reboot recommended."
 log_to_file "SYSTEM" "===== VPS Installation Completed Successfully ====="
+
+# Send Discord notification if webhook is configured
+if [ ! -z "$NOTIFICATION_URL" ]; then
+    log "Sending installation completion notification..."
+    curl -s -X POST "$NOTIFICATION_URL" \
+         -H "Content-Type: application/json" \
+         -d '{
+             "username": "VPS-Bot",
+             "embeds": [
+                 {
+                     "title": "🎉 VPS Installation Complete",
+                     "description": "Your VPS has been successfully configured and deployed!",
+                     "color": 3066993,
+                     "fields": [
+                         {
+                             "name": "🌐 Domain",
+                             "value": "'"$DOMAIN"'",
+                             "inline": true
+                         },
+                         {
+                             "name": "🔒 SSH Port", 
+                             "value": "'"$SSH_PORT"'",
+                             "inline": true
+                         },
+                         {
+                             "name": "📋 Services",
+                             "value": "• Nextcloud AIO\\n• Vaultwarden\\n• Traefik\\n• WireGuard VPN\\n• Monitoring\\n• Backup System",
+                             "inline": false
+                         },
+                         {
+                             "name": "🔗 Quick Links",
+                             "value": "[Nextcloud](https://cloud.'"$DOMAIN"') • [Vaultwarden](https://vaultwarden.'"$DOMAIN"') • [Backup](https://back.'"$DOMAIN"')",
+                             "inline": false
+                         }
+                     ],
+                     "footer": {
+                         "text": "Installation completed on '"$(date +'%Y-%m-%d %H:%M:%S')"'"
+                     }
+                 }
+             ]
+         }' 
+    
+    if [ $? -eq 0 ]; then
+        log_to_file "NOTIFICATION" "Discord notification sent successfully"
+    else
+        log_to_file "NOTIFICATION" "Failed to send Discord notification"
+    fi
+fi

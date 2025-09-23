@@ -8,6 +8,11 @@ set -e
 # Load environment variables
 source /config/backup.env
 
+# Load Discord notifications if webhook is configured
+if [ -n "$NOTIFICATION_URL" ] && [[ "$NOTIFICATION_URL" == *"discord"* ]]; then
+    source /opt/docker-services/discord-notifications.sh
+fi
+
 # Initialize repository if it doesn't exist
 if ! restic snapshots &>/dev/null; then
     echo "Initializing restic repository..."
@@ -33,6 +38,12 @@ backup_with_retry() {
     done
     
     echo "Backup failed for $path after $max_retries attempts"
+    
+    # Send Discord notification for backup failure
+    if [ -n "$NOTIFICATION_URL" ] && [[ "$NOTIFICATION_URL" == *"discord"* ]] && command -v notify_backup_failed >/dev/null 2>&1; then
+        notify_backup_failed "$tag" "Failed after $max_retries attempts"
+    fi
+    
     return 1
 }
 
@@ -56,9 +67,7 @@ fi
 
 echo "Backup completed successfully at $(date)"
 
-# Send notification (optional)
-if [ -n "$NOTIFICATION_URL" ]; then
-    curl -X POST "$NOTIFICATION_URL" \
-         -H "Content-Type: application/json" \
-         -d "{\"text\":\"Backup completed successfully at $(date)\"}"
+# Send Discord notification if configured
+if [ -n "$NOTIFICATION_URL" ] && [[ "$NOTIFICATION_URL" == *"discord"* ]] && command -v notify_backup_success >/dev/null 2>&1; then
+    notify_backup_success "All Services"
 fi

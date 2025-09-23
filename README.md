@@ -16,6 +16,14 @@ Complete configuration to deploy a secure services stack on VPS.
 
 ## Installation (No Physical Access Required)
 
+### Prerequisites
+
+**⚠️ IMPORTANT: Update your system first**
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo reboot  # If kernel updates were installed
+```
+
 ### 1. Clone the repository on your fresh VPS:
 
 ```bash
@@ -243,3 +251,43 @@ cd /opt/server-config/backup
 ./scripts/selective-backup.sh list
 ./scripts/selective-backup.sh restore nextcloud <snapshot-id>
 ```
+
+## Discord Notifications
+
+The system can send Discord notifications for important events:
+
+### Configuration
+
+Add your Discord webhook URL to the `.env` file:
+```bash
+NOTIFICATION_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_URL
+```
+
+### Events Notified
+
+- **Installation completion** - VPS setup finished
+- **Backup success/failure** - Automatic and manual backups
+- **Service restoration** - When services are restored from backup
+- **System alerts** - Critical system events
+
+### Webhook Setup
+
+1. Create a Discord webhook in your server:
+   - Go to Server Settings → Integrations → Webhooks
+   - Click "New Webhook"
+   - Choose channel and copy webhook URL
+
+2. Add the URL to your `.env` file:
+   ```bash
+   NOTIFICATION_URL=https://discord.com/api/webhooks/123456789/abcdefghijklmnop
+   ```
+
+### Testing Notifications
+
+Test your Discord webhook:
+```bash
+cd /opt/docker-services
+./test-discord-webhook.sh
+```
+
+**Note**: Notifications only work with Discord webhooks at this time. Other types of webhooks will be ignored until they are added to the script.
