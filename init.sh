@@ -56,22 +56,16 @@ apt update && apt upgrade -y
 # Install Required Tools
 #----------------------------------------------------------------
 
-if is_step_completed "base_tools"; then
-    echo "Base tools already installed, skipping..."
-else
-    echo ""
-    echo "Installing base tools..."
-    apt install -y curl wget git vim htop tree unzip fail2ban ufw
-    echo "Base tools installed"
-
-    mark_step_completed "base_tools"
-fi
+echo ""
+echo "Installing base tools..."
+apt install -y curl wget git vim htop tree unzip fail2ban ufw
+echo "Base tools installed"
 
 #----------------------------------------------------------------
 # User Creation
 #----------------------------------------------------------------
 
-if is_step_completed "$USER_NAME"; then
+if [ -e /etc/passwd ] && grep -q "$USER_NAME" /etc/passwd; then
     echo "User '$USER_NAME' already created, skipping..."
 else
     echo ""
@@ -83,40 +77,13 @@ else
     else
         echo "User '$USER_NAME' already exists"
     fi
-
-    mark_step_completed "$USER_NAME"
-fi
-
-#----------------------------------------------------------------
-# Firewall Configuration
-#----------------------------------------------------------------
-
-if is_step_completed "ufw_configured"; then
-    echo "UFW firewall already configured, skipping..."
-else
-    echo ""
-    echo "Configuring UFW firewall..."
-    ufw default deny incoming
-    ufw default allow outgoing
-
-    # Open required ports
-    ufw allow $SSH_PORT/tcp comment 'SSH'
-    ufw allow $HTTP_PORT/tcp comment 'HTTP'
-    ufw allow $HTTPS_PORT/tcp comment 'HTTPS'
-    ufw allow $WIREGUARD_PORT/udp comment 'WireGuard VPN'
-
-    # Enable UFW
-    ufw --force enable
-    echo "UFW firewall configured"
-
-    mark_step_completed "ufw_configured"
 fi
 
 #----------------------------------------------------------------
 # Create Port Registry File
 #----------------------------------------------------------------
 
-if is_step_completed "port_registry"; then
+if [ -e /etc/vps-config/.port ]; then
     echo "Port registry file already created, skipping..."
 else
     echo ""
@@ -141,15 +108,23 @@ EOF
     chmod 640 /etc/vps-config/.port
     chown root:root /etc/vps-config/.port
     echo "Port registry file created at /etc/vps-config/.port"
-
-    mark_step_completed "port_registry"
 fi
+
+#----------------------------------------------------------------
+# Firewall Configuration
+#----------------------------------------------------------------
+
+echo ""
+echo "Configuring UFW firewall..."
+
+sh "$SCRIPT_DIR/scripts/update-ufw.sh"
+echo "UFW firewall configured"
 
 #----------------------------------------------------------------
 # Fail2Ban Configuration
 #----------------------------------------------------------------
 
-if is_step_completed "fail2ban_configured"; then
+if [ -e /etc/fail2ban/jail.local ]; then
     echo "Fail2Ban already configured, skipping..."
 else
     echo ""
@@ -170,13 +145,12 @@ EOF
     systemctl restart fail2ban
     systemctl enable fail2ban
     echo "Fail2Ban configured and enabled"
-
-    mark_step_completed "fail2ban_configured"
 fi
 
 #----------------------------------------------------------------
 # SSH Configuration
 #----------------------------------------------------------------
+
 if is_step_completed "ssh_configured"; then
     echo "SSH already configured, skipping..."
 else
@@ -213,7 +187,7 @@ fi
 # Docker Installation
 #----------------------------------------------------------------
 
-if is_step_completed "docker_installed"; then
+if [ -e /usr/bin/docker ]; then
     echo "Docker already installed, skipping..."
 else
     echo ""
@@ -242,15 +216,13 @@ else
     systemctl start docker
     systemctl enable docker
     echo "Docker installed and started"
-
-    mark_step_completed "docker_installed"
 fi
 
 #----------------------------------------------------------------
 # Docker Compose Standalone Installation
 #----------------------------------------------------------------
 
-if is_step_completed "docker_compose_installed"; then
+if [ -e /usr/local/bin/docker-compose ]; then
     echo "Docker Compose already installed, skipping..."
 else
     echo ""
@@ -262,23 +234,16 @@ else
     docker --version
     docker-compose --version
     echo "Docker Compose installed"
-
-    mark_step_completed "docker_compose_installed"
 fi
 
 #----------------------------------------------------------------
 # WireGuard Installation
 #----------------------------------------------------------------
-if is_step_completed "wireguard_installed"; then
-    echo "WireGuard already installed, skipping..."
-else
-    echo ""
-    echo "Installing WireGuard..."
-    apt install -y wireguard wireguard-tools resolvconf
-    echo "WireGuard installed"
 
-    mark_step_completed "wireguard_installed"
-fi
+echo ""
+echo "Installing WireGuard..."
+apt install -y wireguard wireguard-tools resolvconf
+echo "WireGuard installed"
 
 #----------------------------------------------------------------
 # WireGuard Keys Generation
@@ -339,8 +304,17 @@ else
     echo "Detected network interface: $MAIN_INTERFACE"
 
     # Get public IP
-    SERVER_IP=$(curl -s ifconfig.me)
-    echo "Server public IP: $SERVER_IP"
+    if [ "$FETCH_IPV4_ONLY" ]; then
+        SERVER_IP=$(curl -4 -s ifconfig.me)
+    else
+        SERVER_IP=$(curl -s ifconfig.me)
+    fi
+    if echo "$SERVER_IP" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+        echo "IPv4 : $SERVER_IP"
+    else
+        echo "IPv6 : $SERVER_IP"
+        SERVER_IP="[$SERVER_IP]"
+    fi
 
     if [ -f "/etc/wireguard/wg0.conf" ]; then
         echo "WireGuard configuration file already exists, skipping creation..."
@@ -397,7 +371,7 @@ DNS = 1.1.1.1, 1.0.0.1
 
 [Peer]
 PublicKey = ${SERVER_PUBLIC_KEY}
-Endpoint = ${SERVER_IP}:${WIREGUARD_PORT}
+Endpoint = [${SERVER_IP}]:${WIREGUARD_PORT}
 AllowedIPs = ${VPN_SUBNET}
 PersistentKeepalive = 25
 EOF
@@ -436,31 +410,25 @@ wg show
 # Transfer setup scripts and files to user
 #----------------------------------------------------------------
 
-if is_step_completed "scripts_transferred"; then
-    echo "Setup scripts already transferred to user, skipping..."
-else
-    echo ""
-    echo "Transferring setup scripts and files to user $USER_NAME..."
+echo ""
+echo "Transferring setup scripts and files to user $USER_NAME..."
 
-    # Copy all scripts from scripts/ directory
-    for script in "$SCRIPT_DIR/scripts"/*.sh; do
-        if [ -f "$script" ]; then
-            script_name=$(basename "$script")
-            cp "$script" "/home/$USER_NAME/$script_name"
-            chmod +x "/home/$USER_NAME/$script_name"
-            chown $USER_NAME:$USER_NAME "/home/$USER_NAME/$script_name"
-            echo "  - Copied $script_name"
-        fi
-    done
+# Copy all scripts from scripts/ directory
+for script in "$SCRIPT_DIR/scripts"/*.sh; do
+    if [ -f "$script" ]; then
+        script_name=$(basename "$script")
+        cp "$script" "/home/$USER_NAME/$script_name"
+        chmod +x "/home/$USER_NAME/$script_name"
+        chown $USER_NAME:$USER_NAME "/home/$USER_NAME/$script_name"
+        echo "  - Copied $script_name"
+    fi
+done
 
-    # Copy environment file
-    cp "$SCRIPT_DIR/.env" /home/$USER_NAME/.env
-    chown $USER_NAME:$USER_NAME /home/$USER_NAME/.env
+# Copy environment file
+cp "$SCRIPT_DIR/.env" /home/$USER_NAME/.env
+chown $USER_NAME:$USER_NAME /home/$USER_NAME/.env
 
-    echo "Transfer complete"
-
-    mark_step_completed "scripts_transferred"
-fi
+echo "Transfer complete"
 
 #----------------------------------------------------------------
 # Copy configuration files to /etc/vps-config

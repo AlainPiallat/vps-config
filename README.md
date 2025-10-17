@@ -68,6 +68,7 @@ nano .env
 ### 3. Initialize the system (as root)
 
 ```bash
+chmod +x init.sh # Make script executable
 sudo ./init.sh
 ```
 

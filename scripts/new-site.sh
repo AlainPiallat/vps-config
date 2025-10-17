@@ -78,7 +78,7 @@ SITE_DIR="${SITES_DIR}/${SITE_NAME}"
 echo ""
 echo -e "${BLUE}=========================================="
 echo "New Website Deployment"
-echo "==========================================${NC}"
+echo -e "==========================================${NC}"
 echo ""
 echo "Configuration:"
 if [ "$SUBDOMAIN_INPUT" = "@" ]; then
@@ -250,12 +250,12 @@ services:
       - "traefik.docker.network=proxy"
       
       # HTTP router
-      - "traefik.http.routers.${SITE_NAME}.rule=Host(\\\`${FULL_DOMAIN}\\\`)"
+      - "traefik.http.routers.${SITE_NAME}.rule=Host(\`${FULL_DOMAIN}\`)"
       - "traefik.http.routers.${SITE_NAME}.entrypoints=web"
       - "traefik.http.routers.${SITE_NAME}.middlewares=${SITE_NAME}-redirect"
       
       # HTTPS router
-      - "traefik.http.routers.${SITE_NAME}-secure.rule=Host(\\\`${FULL_DOMAIN}\\\`)"
+      - "traefik.http.routers.${SITE_NAME}-secure.rule=Host(\`${FULL_DOMAIN}\`)"
       - "traefik.http.routers.${SITE_NAME}-secure.entrypoints=websecure"
       - "traefik.http.routers.${SITE_NAME}-secure.tls=true"
       - "traefik.http.routers.${SITE_NAME}-secure.tls.certresolver=letsencrypt"
@@ -414,7 +414,7 @@ fi
 echo ""
 echo -e "${BLUE}=========================================="
 echo "Deployment Complete!"
-echo "==========================================${NC}"
+echo -e "==========================================${NC}"
 echo ""
 echo "Site Information:"
 echo "  Name:         ${SITE_NAME}"

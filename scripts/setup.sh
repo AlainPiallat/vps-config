@@ -9,7 +9,7 @@ echo "========================="
 echo ""
 
 # Load environment variables
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(pwd)"
 
 if [ ! -f "$SCRIPT_DIR/.env" ]; then
     echo "ERROR: .env file not found"
@@ -184,8 +184,8 @@ echo "docker-compose.yml created"
 echo ""
 echo "Installing startup script..."
 
-cp "$SCRIPT_DIR/start-admin-stack.sh" ./admin-stack/start.sh
-chmod +x ./admin-stack/start.sh
+cp "$SCRIPT_DIR/start-admin-stack.sh" "~/admin-stack/start.sh"
+chmod +x ~/admin-stack/start.sh
 
 echo "start.sh script installed"
 
