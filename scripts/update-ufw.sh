@@ -1,3 +1,4 @@
+#!/bin/bash
 # =============================================================================
 # update-ufw.sh - Update UFW firewall rules based on .port configuration
 # =============================================================================
@@ -49,7 +50,9 @@ echo ""
 
 while IFS= read -r line; do
     # Skip empty lines and comments
-    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+    if [ -z "$line" ] || echo "$line" | grep -q '^[[:space:]]*#'; then
+        continue
+    fi
     
     # Parse line: port protocol service_name
     port=$(echo "$line" | awk '{print $1}')
@@ -57,16 +60,16 @@ while IFS= read -r line; do
     name=$(echo "$line" | awk '{$1=""; $2=""; print $0}' | sed 's/^[[:space:]]*//')
     
     # Convert protocol to lowercase
-    proto=${proto,,}
+    proto=$(echo "$proto" | tr '[:upper:]' '[:lower:]')
     
     # Validate port and protocol
-    if [[ -z "$port" || -z "$proto" ]]; then
+    if [ -z "$port" ] || [ -z "$proto" ]; then
         echo "  - Skipping invalid line: $line"
         continue
     fi
     
     # Add UFW rule
-    if [[ -n "$name" ]]; then
+    if [ -n "$name" ]; then
         ufw allow "$port/$proto" comment "$name"
         echo "  - Allowed $proto port $port ($name)"
     else

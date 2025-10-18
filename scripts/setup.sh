@@ -1,4 +1,7 @@
-# Admin Stack Configuration Script
+#!/bin/bash
+# =============================================================================
+# setup.sh - Setup Admin Stack with Traefik and Portainer
+# =============================================================================
 # Sets up Traefik reverse proxy and Portainer for Docker management
 # Run as regular user (not root)
 
