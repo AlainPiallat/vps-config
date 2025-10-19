@@ -187,7 +187,7 @@ echo "docker-compose.yml created"
 echo ""
 echo "Installing startup script..."
 
-cp "$SCRIPT_DIR/start-admin-stack.sh" "~/admin-stack/start.sh"
+cp "$SCRIPT_DIR/start-admin-stack.sh" ~/admin-stack/start.sh
 chmod +x ~/admin-stack/start.sh
 
 echo "start.sh script installed"

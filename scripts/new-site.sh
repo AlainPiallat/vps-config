@@ -230,10 +230,8 @@ echo "  - Created ${SITE_DIR}/html/index.html"
 echo ""
 echo -e "${GREEN}Creating Docker Compose configuration...${NC}"
 cat > "$SITE_DIR/docker-compose.yml" << EOF
-version: '3.8'
-
 networks:
-  proxy:
+  proxy:S
     external: true
 
 services:

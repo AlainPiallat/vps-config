@@ -85,7 +85,14 @@ fi
 #----------------------------------------------------------------
 
 if [ -e /etc/vps-config/.port ]; then
-    echo "Port registry file already created, skipping..."
+    echo "Port registry file already created, updating..."
+
+    sed -i -E "s/[0-9]+ (tcp|udp) SSH/${SSH_PORT} tcp SSH/" /etc/vps-config/.port
+    sed -i -E "s/[0-9]+ (tcp|udp) HTTP/${HTTP_PORT} tcp HTTP/" /etc/vps-config/.port
+    sed -i -E "s/[0-9]+ (tcp|udp) HTTPS/${HTTPS_PORT} tcp HTTPS/" /etc/vps-config/.port
+    sed -i -E "s/[0-9]+ (tcp|udp) WireGuard/${WIREGUARD_PORT} udp WireGuard/" /etc/vps-config/.port
+
+    echo "Port registry file updated at /etc/vps-config/.port"
 else
     echo ""
     echo "Creating port registry file..."
@@ -151,37 +158,54 @@ fi
 #----------------------------------------------------------------
 # SSH Configuration
 #----------------------------------------------------------------
+echo ""
+# Fichier de configuration SSH
+SSH_CONFIG="/etc/ssh/sshd_config"
 
-if is_step_completed "ssh_configured"; then
-    echo "SSH already configured, skipping..."
+# 1. Sauvegarde du fichier original
+echo "Sauvegarde de $SSH_CONFIG..."
+cp "$SSH_CONFIG" "${SSH_CONFIG}.bak-$(date +%Y%m%d)"
+
+# 2. Modification sécurisée de sshd_config avec sed (version robuste)
+echo "Modification de $SSH_CONFIG..."
+# Port SSH
+sed -i -E "s/^#?Port [0-9]+/Port $SSH_PORT/" "$SSH_CONFIG"
+# Désactiver l'accès root
+sed -i -E "s/^#?PermitRootLogin .+/PermitRootLogin no/" "$SSH_CONFIG"
+# Désactiver l'authentification par mot de passe
+sed -i -E "s/^#?PasswordAuthentication .+/PasswordAuthentication no/" "$SSH_CONFIG"
+# Activer l'authentification par clé
+sed -i -E "s/^#?PubkeyAuthentication .+/PubkeyAuthentication yes/" "$SSH_CONFIG"
+
+# 3. Configuration du répertoire .ssh pour l'utilisateur
+echo "Configuration du répertoire .ssh pour $USER_NAME..."
+mkdir -p "/home/$USER_NAME/.ssh"
+chmod 700 "/home/$USER_NAME/.ssh"
+chown -R "$USER_NAME:$USER_NAME" "/home/$USER_NAME/.ssh"
+
+# 4. Ajout de la clé publique
+echo "Ajout de la clé publique SSH..."
+cat > "/home/$USER_NAME/.ssh/authorized_keys" <<< "$SSH_PUBLIC_KEY"
+chmod 600 "/home/$USER_NAME/.ssh/authorized_keys"
+chown "$USER_NAME:$USER_NAME" "/home/$USER_NAME/.ssh/authorized_keys"
+
+# 5. Création du répertoire /run/sshd si nécessaire
+echo "Vérification de /run/sshd..."
+mkdir -p /run/sshd
+chmod 0755 /run/sshd
+
+# 6. Test de la configuration et redémarrage du service
+echo "Test de la configuration SSH..."
+if sshd -t; then
+    echo "Configuration valide. Redémarrage du service SSH..."
+    systemctl daemon-reload
+    systemctl restart ssh
+    systemctl enable ssh
+    echo "SSH configuré pour l'utilisateur '$USER_NAME' sur le port $SSH_PORT."
 else
-    echo ""
-    echo "Configuring SSH..."
-    SSH_CONFIG="/etc/ssh/sshd_config"
-    sed -i 's/#Port 22/Port 22/' $SSH_CONFIG
-    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' $SSH_CONFIG
-    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' $SSH_CONFIG
-    sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' $SSH_CONFIG
-
-    mkdir -p /home/$USER_NAME/.ssh
-    chmod 700 /home/$USER_NAME/.ssh
-    chown -R $USER_NAME:$USER_NAME /home/$USER_NAME/.ssh
-
-    cat > /home/$USER_NAME/.ssh/authorized_keys << EOF
-${SSH_PUBLIC_KEY}
-EOF
-
-    chmod 600 /home/$USER_NAME/.ssh/authorized_keys
-    chown $USER_NAME:$USER_NAME /home/$USER_NAME/.ssh/authorized_keys
-
-    mkdir -p /run/sshd
-    chmod 0755 /run/sshd
-
-    # Test config before restarting
-    sshd -t && systemctl restart ssh || echo "SSH config error!"
-    echo "SSH configured for user '$USER_NAME'"
-
-    mark_step_completed "ssh_configured"
+    echo "ERREUR : La configuration SSH est invalide. Restauration de la sauvegarde..."
+    cp "${SSH_CONFIG}.bak-$(date +%Y%m%d)" "$SSH_CONFIG"
+    exit 1
 fi
 
 #----------------------------------------------------------------
@@ -310,7 +334,7 @@ else
     else
         SERVER_IP=$(curl -s ifconfig.me)
     fi
-    if echo "$SERVER_IP" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+    if echo "$SERVER_IP" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
         echo "IPv4 : $SERVER_IP"
     else
         echo "IPv6 : $SERVER_IP"
@@ -372,7 +396,7 @@ DNS = 1.1.1.1, 1.0.0.1
 
 [Peer]
 PublicKey = ${SERVER_PUBLIC_KEY}
-Endpoint = [${SERVER_IP}]:${WIREGUARD_PORT}
+Endpoint = ${SERVER_IP}:${WIREGUARD_PORT}
 AllowedIPs = ${VPN_SUBNET}
 PersistentKeepalive = 25
 EOF

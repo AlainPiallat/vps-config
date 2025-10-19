@@ -16,7 +16,7 @@ if [ ! -f "$PORT_FILE" ]; then
 fi
 
 # Check if running as root
-if [ "$EUID" -ne 0 ]; then 
+if [ "$(id -u)" -ne 0 ]; then 
     echo "ERROR: This script must be run as root"
     echo "Usage: sudo ./update-ufw.sh"
     exit 1
@@ -84,6 +84,8 @@ done < "$PORT_FILE"
 echo ""
 echo "Reloading UFW..."
 ufw reload
+ufw --force enable
+echo "UFW reloaded and enabled"
 
 echo ""
 echo "=========================================="
