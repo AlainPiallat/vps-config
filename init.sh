@@ -393,6 +393,7 @@ else
 Address = ${VPN_CLIENT_LAPTOP_IP}/24
 PrivateKey = ${CLIENT_LAPTOP_PRIVATE}
 DNS = 1.1.1.1, 1.0.0.1
+MTU = 1280
 
 [Peer]
 PublicKey = ${SERVER_PUBLIC_KEY}
@@ -409,6 +410,7 @@ EOF
 Address = ${VPN_CLIENT_PHONE_IP}/24
 PrivateKey = ${CLIENT_PHONE_PRIVATE}
 DNS = 1.1.1.1, 1.0.0.1
+MTU = 1280
 
 [Peer]
 PublicKey = ${SERVER_PUBLIC_KEY}
