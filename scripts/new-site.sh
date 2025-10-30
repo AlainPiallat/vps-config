@@ -225,25 +225,58 @@ EOF
 echo "  - Created ${SITE_DIR}/html/index.html"
 
 #----------------------------------------------------------------
+# Create Dockerfile with PHP and Apache
+#----------------------------------------------------------------
+echo ""
+echo -e "${GREEN}Creating Dockerfile with PHP support...${NC}"
+cat > "$SITE_DIR/Dockerfile" << 'DOCKEREOF'
+FROM php:8.3-apache
+
+# Activer les modules Apache nécessaires
+RUN a2enmod rewrite headers expires
+
+# Configuration Apache pour .htaccess
+RUN echo '<Directory /var/www/html>' > /etc/apache2/conf-available/override.conf && \
+    echo '    Options Indexes FollowSymLinks' >> /etc/apache2/conf-available/override.conf && \
+    echo '    AllowOverride All' >> /etc/apache2/conf-available/override.conf && \
+    echo '    Require all granted' >> /etc/apache2/conf-available/override.conf && \
+    echo '</Directory>' >> /etc/apache2/conf-available/override.conf && \
+    a2enconf override
+
+# Installer des extensions PHP utiles (optionnel, décommentez si nécessaire)
+# RUN docker-php-ext-install mysqli pdo pdo_mysql
+
+# Configuration PHP recommandée
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" && \
+    echo "display_errors = Off" >> "$PHP_INI_DIR/php.ini" && \
+    echo "log_errors = On" >> "$PHP_INI_DIR/php.ini" && \
+    echo "error_log = /var/log/apache2/php_errors.log" >> "$PHP_INI_DIR/php.ini"
+
+# Exposer le port 80
+EXPOSE 80
+DOCKEREOF
+echo "  - Created ${SITE_DIR}/Dockerfile"
+
+#----------------------------------------------------------------
 # Create Docker Compose Configuration
 #----------------------------------------------------------------
 echo ""
 echo -e "${GREEN}Creating Docker Compose configuration...${NC}"
 cat > "$SITE_DIR/docker-compose.yml" << EOF
 networks:
-  proxy:S
+  proxy:
     external: true
 
 services:
   ${SITE_NAME}:
-    image: httpd:2.4-alpine
+    build: .
     container_name: ${SITE_NAME}
     restart: unless-stopped
     networks:
       - proxy
     volumes:
-      - ./html:/usr/local/apache2/htdocs:ro
-      - ./logs:/usr/local/apache2/logs
+      - ./html:/var/www/html
+      - ./logs:/var/log/apache2
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
@@ -276,25 +309,35 @@ echo -e "${GREEN}Creating README...${NC}"
 cat > "$SITE_DIR/README.md" << EOF
 # ${FULL_DOMAIN}
 
-This site is deployed using Docker and Traefik.
+This site is deployed using Docker with PHP 8.3 and Apache, managed by Traefik.
 
 ## Directory Structure
 
 \`\`\`
 ${SITE_NAME}/
 ├── docker-compose.yml  # Docker configuration
-├── html/               # Website files
+├── Dockerfile          # Custom PHP+Apache image
+├── manage.sh          # Management script
+├── html/               # Website files (PHP supported)
 │   └── index.html     # Main page
-├── logs/              # Apache logs
+├── logs/              # Apache & PHP logs
 └── README.md          # This file
 \`\`\`
+
+## Features
+
+- ✅ **PHP 8.3** support
+- ✅ **.htaccess** support (mod_rewrite enabled)
+- ✅ **HTTPS** with automatic Let's Encrypt certificates
+- ✅ **Auto-redirect** HTTP → HTTPS
+- ✅ Apache modules: rewrite, headers, expires
 
 ## Management Commands
 
 ### Start the site
 \`\`\`bash
 cd ${SITE_DIR}
-docker compose up -d
+docker compose up -d --build
 \`\`\`
 
 ### Stop the site
@@ -315,18 +358,70 @@ cd ${SITE_DIR}
 docker compose restart
 \`\`\`
 
+### Rebuild after Dockerfile changes
+\`\`\`bash
+cd ${SITE_DIR}
+docker compose up -d --build --force-recreate
+\`\`\`
+
 ### Update content
 1. Edit files in \`${SITE_DIR}/html/\`
-2. Restart the container: \`docker compose restart\`
+2. Changes are reflected immediately (no restart needed for content)
+3. Restart only if you modify Dockerfile or docker-compose.yml
 
 ## URLs
 
 - **Production**: https://${FULL_DOMAIN}
 - **HTTP (redirects to HTTPS)**: http://${FULL_DOMAIN}
 
+## PHP Configuration
+
+- Version: PHP 8.3
+- Error logging: Enabled (check logs/php_errors.log)
+- Display errors: Disabled (production mode)
+
+## .htaccess Support
+
+The \`.htaccess\` file is fully supported. You can use:
+- URL rewriting (mod_rewrite)
+- Custom headers
+- Cache control
+- Access control
+- And more...
+
+Example \`.htaccess\`:
+\`\`\`apache
+# Enable rewriting
+RewriteEngine On
+
+# Redirect to index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+\`\`\`
+
 ## SSL Certificate
 
 SSL certificates are automatically generated and renewed by Let's Encrypt via Traefik.
+
+## Troubleshooting
+
+### PHP not working
+- Check logs: \`docker compose logs -f\`
+- Verify PHP files have .php extension
+- Check file permissions
+
+### .htaccess not working
+- Verify file is named exactly \`.htaccess\` (with leading dot)
+- Check Apache error logs in \`logs/error.log\`
+- Ensure directives are valid
+
+### Rebuild container
+\`\`\`bash
+cd ${SITE_DIR}
+docker compose down
+docker compose up -d --build --force-recreate
+\`\`\`
 EOF
 echo "  - Created ${SITE_DIR}/README.md"
 
@@ -341,13 +436,17 @@ cat > "$SITE_DIR/manage.sh" << 'EOF'
 
 case "$1" in
     start)
-        docker compose up -d
+        docker compose up -d --build
         ;;
     stop)
         docker compose down
         ;;
     restart)
         docker compose restart
+        ;;
+    rebuild)
+        docker compose down
+        docker compose up -d --build --force-recreate
         ;;
     logs)
         docker compose logs -f
@@ -356,7 +455,15 @@ case "$1" in
         docker compose ps
         ;;
     *)
-        echo "Usage: $0 {start|stop|restart|logs|status}"
+        echo "Usage: $0 {start|stop|restart|rebuild|logs|status}"
+        echo ""
+        echo "Commands:"
+        echo "  start    - Start the site (builds if needed)"
+        echo "  stop     - Stop the site"
+        echo "  restart  - Restart the site"
+        echo "  rebuild  - Force rebuild and restart"
+        echo "  logs     - View logs (Ctrl+C to exit)"
+        echo "  status   - Show container status"
         exit 1
         ;;
 esac
@@ -368,9 +475,9 @@ echo "  - Created ${SITE_DIR}/manage.sh"
 # Start Docker Container
 #----------------------------------------------------------------
 echo ""
-echo -e "${GREEN}Starting Docker container...${NC}"
+echo -e "${GREEN}Building and starting Docker container...${NC}"
 cd "$SITE_DIR"
-docker compose up -d
+docker compose up -d --build
 
 # Wait for container to be ready
 echo "Waiting for container to start..."
@@ -420,24 +527,31 @@ echo "  Name:         ${SITE_NAME}"
 echo "  Domain:       ${FULL_DOMAIN}"
 echo "  Directory:    ${SITE_DIR}"
 echo "  Container:    ${SITE_NAME}"
+echo "  PHP Version:  8.3"
+echo "  .htaccess:    ✓ Enabled"
 echo ""
 echo "Access URLs:"
 echo "  Production:   https://${FULL_DOMAIN}"
 echo "  HTTP:         http://${FULL_DOMAIN} (redirects to HTTPS)"
 echo ""
 echo "Management:"
-echo "  Start:        cd ${SITE_DIR} && docker compose up -d"
+echo "  Start:        cd ${SITE_DIR} && docker compose up -d --build"
 echo "  Stop:         cd ${SITE_DIR} && docker compose down"
 echo "  Logs:         cd ${SITE_DIR} && docker compose logs -f"
-echo "  Quick:        cd ${SITE_DIR} && ./manage.sh {start|stop|restart|logs|status}"
+echo "  Rebuild:      cd ${SITE_DIR} && ./manage.sh rebuild"
+echo "  Quick:        cd ${SITE_DIR} && ./manage.sh {start|stop|restart|rebuild|logs|status}"
 echo ""
 echo "Content:"
 echo "  Edit files in: ${SITE_DIR}/html/"
 echo "  Main page:     ${SITE_DIR}/html/index.html"
+echo "  PHP support:   Create .php files (e.g., index.php)"
+echo "  .htaccess:     ${SITE_DIR}/html/.htaccess"
 echo ""
 echo -e "${YELLOW}Important:${NC}"
 echo "  1. Ensure DNS records for ${FULL_DOMAIN} point to this server"
 echo "  2. SSL certificate will be automatically generated by Let's Encrypt"
 echo "  3. It may take a few minutes for HTTPS to become available"
+echo "  4. PHP 8.3 is ready to use - just create .php files"
+echo "  5. .htaccess is fully supported (mod_rewrite enabled)"
 echo ""
 echo -e "${BLUE}==========================================${NC}"

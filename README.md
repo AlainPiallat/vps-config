@@ -280,10 +280,11 @@ The `new-site.sh` script automatically:
 ```
 /srv/site-blog/
 ├── docker-compose.yml # Docker configuration
+├── Dockerfile         # Custom PHP+Apache image
+├── manage.sh          # Management script
 ├── html/              # Website files (edit here)
 │   └── index.html     # Main page
 ├── logs/              # Apache access and error logs
-├── manage.sh          # Quick management script
 └── README.md          # Site-specific documentation
 ```
 
@@ -313,7 +314,7 @@ cd /srv/site-blog
 ### Updating Content
 
 1. Edit files in `/srv/site-<name>/html/`
-2. Restart the container: `cd /srv/site-<name> && docker compose restart`
+2. Restart the container: `cd /srv/site-<name> && ./manage.sh restart`
 
 ### Requirements
 
